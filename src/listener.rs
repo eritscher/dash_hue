@@ -1,17 +1,17 @@
+use crate::button::Button;
 use crate::events::Events;
 use pnet::datalink::{self, Channel, NetworkInterface};
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
-use pnet::util::MacAddr;
 
 pub struct PacketListener {
-  mac_addresses: Vec<MacAddr>,
+  buttons: &'static Vec<Button>,
   hooks: Vec<Box<Events>>,
 }
 
 impl PacketListener {
-  pub fn new(addresses: Vec<MacAddr>) -> Self {
-    Self {
-      mac_addresses: addresses,
+  pub fn new(buttons: &'static Vec<Button>) -> PacketListener {
+    PacketListener {
+      buttons: &buttons,
       hooks: Vec::new(),
     }
   }
@@ -45,7 +45,14 @@ impl PacketListener {
 
   fn handle_ethernet_packet(&self, packet: &EthernetPacket) {
     let packet_mac = packet.get_source();
-    if self.mac_addresses.contains(&packet_mac) {
+    let mut is_tracked_button = false;
+    for button in self.buttons {
+      if button.address == packet_mac {
+        is_tracked_button = true;
+        break;
+      }
+    }
+    if is_tracked_button {
       match packet.get_ethertype() {
         EtherTypes::Arp => {
           for hook in &self.hooks {
@@ -64,8 +71,6 @@ impl PacketListener {
         }
         _ => {}
       }
-    } else {
-      println!("That's not a bing0");
     }
   }
 }
