@@ -1,0 +1,11 @@
+name: dash_hue
+version: "1.0"
+author: Evan Ritscher <evan.ritscher@gmail.com>
+about: Connects Amazon Dash buttons to Philips Hue Lights
+args: 
+  - json: 
+      short: j
+      value_name: FILE
+      help: JSON of the buttons to listen for.
+      takes_value: true
+      required: true
