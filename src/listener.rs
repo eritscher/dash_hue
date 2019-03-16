@@ -1,17 +1,19 @@
 use crate::button::Button;
+use crate::config::PUSH_TIMES;
 use crate::events::Events;
 use pnet::datalink::{self, Channel, NetworkInterface};
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
+use std::time::{Duration, Instant};
 
 pub struct PacketListener {
-  buttons: &'static Vec<Button>,
+  tracked_buttons: &'static Vec<Button>,
   hooks: Vec<Box<Events>>,
 }
 
 impl PacketListener {
-  pub fn new(buttons: &'static Vec<Button>) -> PacketListener {
+  pub fn new(tracked_buttons: &'static Vec<Button>) -> PacketListener {
     PacketListener {
-      buttons: &buttons,
+      tracked_buttons: &tracked_buttons,
       hooks: Vec::new(),
     }
   }
@@ -42,11 +44,10 @@ impl PacketListener {
       }
     }
   }
-
   fn handle_ethernet_packet(&self, packet: &EthernetPacket) {
     let packet_mac = packet.get_source();
     let mut is_tracked_button = false;
-    for button in self.buttons {
+    for button in self.tracked_buttons {
       if button.address == packet_mac {
         is_tracked_button = true;
         break;
@@ -60,8 +61,26 @@ impl PacketListener {
           }
         }
         EtherTypes::Ipv4 => {
-          for hook in &self.hooks {
-            hook.on_ipv4(packet_mac);
+          let lock = PUSH_TIMES.lock();
+          match lock {
+            Ok(mut push_times) => {
+              if let Some(last_push) = push_times.get(&packet_mac) {
+                if last_push.elapsed() > Duration::from_secs(5) {
+                  for hook in &self.hooks {
+                    hook.on_ipv4(packet_mac);
+                  }
+                  push_times.insert(packet_mac, Instant::now());
+                } else {
+                  println!("Received packet, debouncing.");
+                }
+              } else {
+                push_times.insert(packet_mac, Instant::now());
+                for hook in &self.hooks {
+                  hook.on_ipv4(packet_mac);
+                }
+              }
+            }
+            Err(e) => println!("error {}", e),
           }
         }
         EtherTypes::Ipv6 => {
