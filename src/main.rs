@@ -1,3 +1,7 @@
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
+
 mod button;
 mod config;
 mod events;
@@ -8,10 +12,6 @@ mod room;
 use config::CONFIG;
 use hue_controller::HueController;
 use listener::PacketListener;
-
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
 
 fn main() {
     let tracked_buttons = &CONFIG.buttons;

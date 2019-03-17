@@ -1,5 +1,5 @@
 use crate::button::Button;
-use crate::config::PUSH_TIMES;
+use crate::config::{CONFIG, PUSH_TIMES};
 use crate::events::Events;
 use pnet::datalink::{self, Channel, NetworkInterface};
 use pnet::packet::ethernet::{EtherTypes, EthernetPacket};
@@ -17,6 +17,7 @@ impl PacketListener {
       hooks: Vec::new(),
     }
   }
+
   pub fn add_events_hook<E: Events + 'static>(&mut self, hook: E) {
     self.hooks.push(Box::new(hook))
   }
@@ -24,9 +25,9 @@ impl PacketListener {
   pub fn start(&self) {
     let interface = datalink::interfaces()
       .into_iter()
-      .filter(|iface: &NetworkInterface| iface.name == "en0")
+      .filter(|iface: &NetworkInterface| iface.name == CONFIG.interface)
       .next()
-      .unwrap();
+      .expect("Unable to detect selected network interface.");
 
     let (_, mut rx) = match datalink::channel(&interface, Default::default()) {
       Ok(Channel::Ethernet(tx, rx)) => (tx, rx),
@@ -40,10 +41,11 @@ impl PacketListener {
           let packet = EthernetPacket::new(raw_packet).unwrap();
           self.handle_ethernet_packet(&packet);
         }
-        Err(e) => panic!("an error occured, {}", e),
+        Err(e) => panic!("An error occured recieving from the datalink, {:?}", e),
       }
     }
   }
+
   fn handle_ethernet_packet(&self, packet: &EthernetPacket) {
     let packet_mac = packet.get_source();
     let mut is_tracked_button = false;
@@ -54,6 +56,20 @@ impl PacketListener {
       }
     }
     if is_tracked_button {
+      match PUSH_TIMES.lock() {
+        Ok(mut push_times) => {
+          let last_push = push_times.get(&packet_mac);
+          if last_push.is_none()
+            || (last_push.is_some() && last_push.unwrap().elapsed() > Duration::from_secs(5))
+          {
+            push_times.insert(packet_mac, Instant::now());
+          } else {
+            return;
+          }
+        }
+        Err(e) => println!("error {}", e),
+      }
+
       match packet.get_ethertype() {
         EtherTypes::Arp => {
           for hook in &self.hooks {
@@ -61,26 +77,8 @@ impl PacketListener {
           }
         }
         EtherTypes::Ipv4 => {
-          let lock = PUSH_TIMES.lock();
-          match lock {
-            Ok(mut push_times) => {
-              if let Some(last_push) = push_times.get(&packet_mac) {
-                if last_push.elapsed() > Duration::from_secs(5) {
-                  for hook in &self.hooks {
-                    hook.on_ipv4(packet_mac);
-                  }
-                  push_times.insert(packet_mac, Instant::now());
-                } else {
-                  println!("Received packet, debouncing.");
-                }
-              } else {
-                push_times.insert(packet_mac, Instant::now());
-                for hook in &self.hooks {
-                  hook.on_ipv4(packet_mac);
-                }
-              }
-            }
-            Err(e) => println!("error {}", e),
+          for hook in &self.hooks {
+            hook.on_ipv4(packet_mac);
           }
         }
         EtherTypes::Ipv6 => {

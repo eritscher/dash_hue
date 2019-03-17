@@ -10,6 +10,7 @@ pub struct HueController {
   http_client: Client,
   tracked_buttons: &'static Vec<Button>,
 }
+
 impl HueController {
   pub fn new(tracked_buttons: &'static Vec<Button>) -> HueController {
     HueController {
@@ -40,16 +41,13 @@ impl HueController {
       .http_client
       .get(get_room_url.as_str())
       .send()
-      .unwrap()
+      .expect("An error occured trying to read the current room status.")
       .json::<Room>()
       .unwrap();
 
     let mut payload: HashMap<String, bool> = HashMap::new();
-    payload.insert("on".to_owned(), true);
+    payload.insert("on".to_owned(), !current_room_state.state.any_on);
 
-    if current_room_state.state.any_on {
-      *payload.get_mut("on").unwrap() = false;
-    };
     let put_room_url = format!(
       "http://{}/api/{}/groups/{}/action",
       &CONFIG.host.as_str(),
@@ -57,24 +55,26 @@ impl HueController {
       group_id
     );
 
-    let body = serde_json::to_string(&payload).unwrap();
-    let update_room_state = self
+    let put_body = serde_json::to_string(&payload).unwrap();
+
+    self
       .http_client
       .put(put_room_url.as_str())
-      .body(body)
-      .send();
+      .body(put_body)
+      .send()
+      .expect("An error occurred PUTting the light state.");
   }
 }
 
 impl Events for HueController {
   fn on_arp(&self, address: MacAddr) {
-    println!("Hi there, received a ARP frame");
+    println!("Recieved an ARP packet for {}", address);
   }
   fn on_ipv4(&self, address: MacAddr) {
     let pressed_button = self.get_pressed_button(address);
     self.toggle_room_state(&pressed_button.room);
   }
   fn on_ipv6(&self, address: MacAddr) {
-    println!("Hi there, received a IP6 frame");
+    println!("Recieved an IPv6 packet for {}", address);
   }
 }
