@@ -36,14 +36,13 @@ impl HueController {
       &CONFIG.api_key.as_str(),
       group_id
     );
-
     let current_room_state: Room = self
       .http_client
       .get(get_room_url.as_str())
       .send()
       .expect("An error occured trying to read the current room status.")
       .json::<Room>()
-      .unwrap();
+      .expect("An error occured trying to convert room state to rust.");
 
     let mut payload: HashMap<String, bool> = HashMap::new();
     payload.insert("on".to_owned(), !current_room_state.state.any_on);
@@ -70,6 +69,9 @@ impl Events for HueController {
   fn on_arp(&self, address: MacAddr) {
     println!("Recieved an ARP packet for {}", address);
   }
+  /**
+   * The Raspberry Pi is not able to read the ethertype correctly, so for now every packet will call the onipv4 function.
+   */
   fn on_ipv4(&self, address: MacAddr) {
     let pressed_button = self.get_pressed_button(address);
     self.toggle_room_state(&pressed_button.room);

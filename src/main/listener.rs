@@ -69,25 +69,33 @@ impl PacketListener {
         }
         Err(e) => println!("error {}", e),
       }
-
-      match packet.get_ethertype() {
-        EtherTypes::Arp => {
-          for hook in &self.hooks {
-            hook.on_arp(packet_mac);
-          }
-        }
-        EtherTypes::Ipv4 => {
-          for hook in &self.hooks {
-            hook.on_ipv4(packet_mac);
-          }
-        }
-        EtherTypes::Ipv6 => {
-          for hook in &self.hooks {
-            hook.on_ipv6(packet_mac);
-          }
-        }
-        _ => {}
+      #[allow(unused_doc_comments)]
+      /**
+       * For some reason the raspberry pi is not able to read the packet's ethertype. It always comes in as unknown.
+       * For now, I'm going to just remove this and always respond with the ipv4 hook on a matched packet.
+       */
+      for hook in &self.hooks {
+        hook.on_ipv4(packet_mac);
       }
+
+      // match packet.get_ethertype() {
+      //   EtherTypes::Arp => {
+      //     for hook in &self.hooks {
+      //       hook.on_arp(packet_mac);
+      //     }
+      //   }
+      //   EtherTypes::Ipv4 => {
+      //     for hook in &self.hooks {
+      //       hook.on_ipv4(packet_mac);
+      //     }
+      //   }
+      //   EtherTypes::Ipv6 => {
+      //     for hook in &self.hooks {
+      //       hook.on_ipv6(packet_mac);
+      //     }
+      //   }
+      //   _ => {}
+      // }
     }
   }
 }
