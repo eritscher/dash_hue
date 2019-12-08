@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 pub struct PacketListener {
   tracked_buttons: &'static Vec<Button>,
-  hooks: Vec<Box<Events>>,
+  hooks: Vec<Box<dyn Events>>,
 }
 
 impl PacketListener {
